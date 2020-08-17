@@ -36,8 +36,8 @@ int numero_massimo_avanzamenti = 90;    // quante volte è possibile usare lo sp
 int servo_low = 50;                     // servo press position
 int servo_high = 100;                   // servo release position
 // constant
-const int numero_lettere_max = 8;       // A-H
-const int numero_numeri_max = 12;       // 1-12
+const int numero_lettere_max = 7;       // (Base 0) A-H
+const int numero_numeri_max = 11;       // (Base 0)1-12
 const int stepsPerRevolution = 2048;
 const int step_numeri_near = -100;
 const int step_numeri_far = 100;
@@ -53,47 +53,64 @@ Servo myservo;  // create servo object to control a servo
 
 void setup() {
   pinMode(pin_buzzer,OUTPUT);     // set buzzer pin as output
-  myStepper_numeri.setSpeed(20);  // set motor speed
+  myStepper_numeri.setSpeed(10);  // set motor speed
   myStepper_lettere.setSpeed(20); // set motor speed
   SetInput();                     // set pin as input
   myservo.attach(pin_servo);      // servo 
   Serial.begin(9600);             // initialize the serial port:
   PrintActualPosition();
   Bip(500,HIGH,LOW);                    // bip for initialization finished
+  _moving =  getMoving();
+
+  //setPositionLettere(4);
+  //setPositionNumeri(0);
 }
 
 
 void loop() {
-  if (analogRead(pin_goToHome) < 100) GoToHome();               // Go to home 
-  if (digitalRead(pin_avanti) == LOW) AvanzaHoleLettere();      // Avanti 
-  if (digitalRead(pin_indietro) == LOW) IndietroHoleLettere();  // Indietro 
-  if (digitalRead(pin_sparo) == LOW) Sparo();                   // Sparo
-  if (digitalRead(pin_mute) == LOW) Mute();                     // Mute
-}
-
-void Mute(){
-  Bip(100,LOW,LOW);
-  PrintActualPosition();
+  if (analogRead(pin_goToHome) < 100) GoToHome();               // Go to home  **ok
+  if (_moving != 1){
+    if (digitalRead(pin_avanti) == LOW) AvanzaHoleLettere();      // Avanti 
+    if (digitalRead(pin_indietro) == LOW) IndietroHoleLettere();  // Indietro 
+    if (digitalRead(pin_sparo) == LOW) Sparo();                   // Sparo
+    if (digitalRead(pin_mute) == LOW) Mute();                     // Mute
+  }
+  else{
+    Serial.println("go to home, shutdown during movement occured");
+      Bip(1000,HIGH,LOW);
+      Bip(1000,LOW,LOW);
+      Bip(1000,HIGH,LOW);
+  }
+   delay(50);
 }
 
 
 void PrintActualPosition(){
   Serial.println("printActualPosition");
   Serial.print("Numeri: ");
-  Serial.print(posizione_attuale_numeri);
-  Serial.print(" Lettere: ");
-  Serial.println(posizione_attuale_lettere);
+  //Serial.print(posizione_attuale_numeri);
+  Serial.println(getPositionNumeri());
+  Serial.print("Lettere: ");
+  //Serial.println(posizione_attuale_lettere);
+  Serial.println(getPositionLettere());
+  Serial.print("getMoving: ");
+  Serial.println(getMoving());
 }
 
 
 void GoToHome(){
   Serial.println("goToHome");
+  Bip(100,LOW,LOW);
+  setMoving(true);
   GoHomeLettere();
   GoHomeNumeri();
+  DeltaHoleLettere(delta_home_lettere);       // Aggiungo movimento delta per lettere
   for (int i=0; i < avanzamento_lettere_dopo_home; i++){
      AvanzaHoleLettere();                     // Avanzo di 1 hole lettere
   }
-  DeltaHoleLettere(delta_home_lettere);       // Aggiungo movimento delta per lettere
+  setMoving(false);
+  delay(10);
+  _moving =  getMoving();
 }
 
 
@@ -167,54 +184,64 @@ void AvanzaHoleNumeri(){
 
 void AvanzaHoleLettere(){
   Bip(100,LOW,LOW);
-  if (analogRead(pin_endstop_lettere_near) < 100) {
-    AvanzaHoleNumeri();
-    GoFarLettere();
-  }
-  else{
-    Serial.println("avanzaHoleLettere");
-    int ministep = step_next_hole / divider;
-    for (int i = 0; i < divider; i++){
-      if (analogRead(pin_endstop_lettere_near) > 100){
-        myStepper_lettere.step(ministep);
-      }
-      if (analogRead(pin_endstop_lettere_near) < 100){
-        Bip(100,HIGH,HIGH);
+  int valLettere = getPositionLettere();
+  int valNumeri = getPositionNumeri();
+  
+  // check endstop reached
+  if (valLettere < numero_lettere_max) {
+    setMoving(true);
+    if (analogRead(pin_endstop_lettere_near) > 100) {
+      Serial.println("avanzaHoleLettere");
+      int ministep = step_next_hole / divider;
+      for (int i = 0; i < divider; i++){
+        if (analogRead(pin_endstop_lettere_near) > 100){
+          myStepper_lettere.step(ministep);
+        }
       }
     }
-    posizione_attuale_lettere+=1; // if endstop not pressed, update my position
-    PrintActualPosition();
-    SpegniMotori();
+    setPositionLettere(valLettere+1);
+    SpegniMotori(); 
+  }
+  else{
+    Serial.println("Lettere max reached");
+    if (valNumeri < numero_numeri_max){
+      AvanzaHoleNumeri();
+      
+    }
+    else{
+      Serial.println("end");
+    }
+    // muoversi nella prossima riga di numeri e andare all'inizio delle lettere
+    
   }
 }
 
 
 void IndietroHoleLettere(){
   Serial.println("indietroHoleLettere");
-  Serial.println("posizione_attuale_lettere");
-  Serial.println(posizione_attuale_lettere);
-  Serial.println("avanzamento_lettere_dopo_home");
-  Serial.println(avanzamento_lettere_dopo_home);
-  Serial.println("posizione_attuale_numeri");
-  Serial.println(posizione_attuale_numeri);
-  if ((posizione_attuale_lettere <= avanzamento_lettere_dopo_home) & (posizione_attuale_numeri == 1)){
+  int valLettere = getPositionLettere();
+  int valNumeri = getPositionNumeri();
+  if (valLettere <= avanzamento_lettere_dopo_home && valNumeri == 0){
     Serial.println("Non permesso");
   }
   else{
-    int ministep = step_next_hole / divider;
-    for (int i = 0; i < divider; i++){
-      if (analogRead(pin_endstop_lettere_near) > 100){
-        myStepper_lettere.step(-ministep);
+      setMoving(true);
+      int ministep = step_next_hole / divider;
+      for (int i = 0; i < divider; i++){
+        if (analogRead(pin_endstop_lettere_far) > 100){
+          myStepper_lettere.step(-ministep);
+        }
       }
-    }
-    posizione_attuale_lettere -=1;
-    SpegniMotori();
+      //posizione_attuale_lettere -=1;
+      setPositionLettere(valLettere-1);
+      SpegniMotori();
   }
 }
 
 
 void GoHomeLettere(){
   Serial.println("goHomeLettere");
+  setMoving(true);
   int ministep = step_next_hole / divider;
   for (int x = 0; x < 10; x++){
     for (int i = 0; i < divider; i++){
@@ -223,7 +250,7 @@ void GoHomeLettere(){
       }
     }
   }
-  posizione_attuale_lettere = 0;
+  setPositionLettere(0);
   SpegniMotori();
 }
 
@@ -251,17 +278,36 @@ void GoHomeNumeri(){
       }
     }
   }
-  posizione_attuale_numeri = 1;
+  setPositionNumeri(0);
   SpegniMotori();
 }
 
+
+
+
+void setPositionLettere(int lettere){ EEPROM.write(addrLettere, lettere);}
+
+void setPositionNumeri(int numeri){ EEPROM.write(addrNumeri, numeri);}
+
+int getPositionLettere(){return EEPROM.read(addrLettere);}
+
+int getPositionNumeri() { return EEPROM.read(addrNumeri);}
+
+void setMoving(bool stato){ EEPROM.write(addrMoving, stato);}    
+
+bool getMoving(){ return EEPROM.read(addrMoving);}     
+
+void Mute(){
+  Serial.println("Mute ");
+  Bip(100,LOW,LOW);
+  PrintActualPosition();
+}
 
 void Bip(int duration, bool initial_state, bool final_state){
   digitalWrite(pin_buzzer,initial_state);
   delay(duration);
   digitalWrite(pin_buzzer,final_state);
 }
-
 
 void SetInput(){
   pinMode(pin_endstop_lettere_far,INPUT_PULLUP);
@@ -275,47 +321,17 @@ void SetInput(){
   pinMode(pin_sparo,INPUT_PULLUP);
 }
 
-
 void SpegniMotori(){
   int motorPins[] = {4, 5, 6, 7, 8, 9, 10, 11};
   for (int p=0; p < 8; p++){
     digitalWrite(motorPins[p],LOW);
   }
+  setMoving(false);
 }
 
-
 void DeltaHoleLettere(int step_to_move){
- Serial.println("deltaHoleLettere");
+  Serial.println("deltaHoleLettere");
+  setMoving(true);
   myStepper_lettere.step(-step_to_move);
   SpegniMotori();
 }
-
-
-void setPositionLettere(int lettere)
-{
-  EEPROM.write(addrLettere, lettere);
-}
-
-void setPositionNumeri(int numeri)
-{
-  EEPROM.write(addrNumeri, numeri);
-}
-
-int getPositionLettere()
-{
-  return (int) EEPROM.read(addrLettere);
-}
-int getPositionNumeri()
-{
-  return (int) EEPROM.read(addrNumeri);
-}
-
-void setMoving(bool stato)
-{
-  EEPROM.write(addrMoving, stato);
-}    
-
-bool getMoving()
-{
-  return (bool) EEPROM.read(addrMoving);
-}     
