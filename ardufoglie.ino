@@ -158,6 +158,8 @@ void AzionaServo(){
 
 void IndietroHoleNumeri(){
   Serial.println("indietroHoleNumeri");
+  int valLettere = getPositionLettere();
+  int valNumeri = getPositionNumeri();
   int ministep = step_next_hole / divider;
   for (int i = 0; i < divider; i++){
     if (analogRead(pin_endstop_numeri_near) > 100){
@@ -165,20 +167,30 @@ void IndietroHoleNumeri(){
     }
   }
   SpegniMotori();
-  posizione_attuale_numeri -=1;
+  setPositionNumeri(valNumeri -1);
 }
 
 
 void AvanzaHoleNumeri(){
   Serial.println("avanzaHoleNumeri");
-  int ministep = step_next_hole / divider;
-  for (int i = 0; i < divider; i++){
-    if (analogRead(pin_endstop_numeri_far) > 100){
-      myStepper_numeri.step(-ministep);
+  int valLettere = getPositionLettere();
+  int valNumeri = getPositionNumeri();
+  if (analogRead(pin_endstop_numeri_far) > 100 && valNumeri < numero_numeri_max){
+    int ministep = step_next_hole / divider;
+    for (int i = 0; i < divider; i++){
+      if (analogRead(pin_endstop_numeri_far) > 100){
+        myStepper_numeri.step(-ministep);
+      }
     }
+    SpegniMotori();
+    setPositionNumeri(valNumeri +1);
   }
-  SpegniMotori();
-  posizione_attuale_numeri +=1;
+  else
+  {
+   Serial.println("Numeri max reached");
+    
+  }
+  
 }
 
 
@@ -200,22 +212,23 @@ void AvanzaHoleLettere(){
       }
     }
     setPositionLettere(valLettere+1);
-    SpegniMotori(); 
   }
   else{
     Serial.println("Lettere max reached");
     if (valNumeri < numero_numeri_max){
+      setMoving(true);
       AvanzaHoleNumeri();
-      
+      for (int i = 0; i < numero_lettere_max; i++){
+        IndietroHoleLettere();
+      }
     }
     else{
       Serial.println("end");
     }
     // muoversi nella prossima riga di numeri e andare all'inizio delle lettere
-    
   }
+  SpegniMotori(); 
 }
-
 
 void IndietroHoleLettere(){
   Serial.println("indietroHoleLettere");
@@ -225,19 +238,25 @@ void IndietroHoleLettere(){
     Serial.println("Non permesso");
   }
   else{
-      setMoving(true);
+    setMoving(true);
+    if (valLettere == 0){
+      IndietroHoleNumeri();
+      for (int i = 0; i < numero_lettere_max; i++){
+        AvanzaHoleLettere();
+      }
+    }
+    else{
       int ministep = step_next_hole / divider;
       for (int i = 0; i < divider; i++){
         if (analogRead(pin_endstop_lettere_far) > 100){
           myStepper_lettere.step(-ministep);
         }
       }
-      //posizione_attuale_lettere -=1;
       setPositionLettere(valLettere-1);
       SpegniMotori();
+    }
   }
 }
-
 
 void GoHomeLettere(){
   Serial.println("goHomeLettere");
