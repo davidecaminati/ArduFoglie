@@ -296,7 +296,7 @@ void setPositionLettere(int lettere)
   EEPROM.write(addrLettere, lettere);
 }
 
-void setPositionNumeri(int lettere)
+void setPositionNumeri(int numeri)
 {
   EEPROM.write(addrNumeri, numeri);
 }
@@ -319,4 +319,3 @@ bool getMoving()
 {
   return (bool) EEPROM.read(addrMoving);
 }     
-
