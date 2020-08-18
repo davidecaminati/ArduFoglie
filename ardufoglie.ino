@@ -140,6 +140,7 @@ void AvanzaHoleLettere(){
   Bip(100,LOW,LOW);
   int valLettere = getPositionLettere();
   int valNumeri = getPositionNumeri();
+
   // check endstop reached
   if (valLettere < numero_lettere_max) {
     if (analogRead(pin_endstop_lettere_near) > 100) {
@@ -152,6 +153,10 @@ void AvanzaHoleLettere(){
       AvanzaHoleNumeri();
       for (int i = 0; i < numero_lettere_max; i++){
         IndietroHoleLettere();
+      }
+      valNumeri = getPositionNumeri();
+      if (valNumeri == 11){ // last numeri line exception
+        AvanzaHoleLettere();
       }
     }
     else{
@@ -177,7 +182,7 @@ void IndietroHoleLettere(){
       }
     }
     else{
-      MoveStepperLettere(INDIETRO);
+         MoveStepperLettere(INDIETRO);
     }
   }
 }
